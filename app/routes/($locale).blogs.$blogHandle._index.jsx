@@ -1,51 +1,39 @@
 import {Link, useLoaderData} from 'react-router';
-import {Image, getPaginationVariables} from '@shopify/hydrogen';
-import {PaginatedResourceSection} from '~/components/PaginatedResourceSection';
+import {Image, Pagination, getPaginationVariables} from '@shopify/hydrogen';
 import {redirectIfHandleIsLocalized} from '~/lib/redirect';
 
 /**
  * @type {Route.MetaFunction}
  */
 export const meta = ({data}) => {
-  return [{title: `Hydrogen | ${data?.blog.title ?? ''} blog`}];
+  return [
+    {title: `${data?.blog.seo?.title || data?.blog.title || ''} | Viktilabs`},
+    {name: 'description', content: data?.blog.seo?.description ?? ''},
+  ];
 };
 
 /**
  * @param {Route.LoaderArgs} args
  */
 export async function loader(args) {
-  // Start fetching non-critical data without blocking time to first byte
-  const deferredData = loadDeferredData(args);
-
-  // Await the critical data required to render initial state of the page
   const criticalData = await loadCriticalData(args);
-
-  return {...deferredData, ...criticalData};
+  return {...criticalData};
 }
 
 /**
- * Load data necessary for rendering content above the fold. This is the critical data
- * needed to render the page. If it's unavailable, the whole page should 400 or 500 error.
  * @param {Route.LoaderArgs}
  */
 async function loadCriticalData({context, request, params}) {
-  const paginationVariables = getPaginationVariables(request, {
-    pageBy: 4,
-  });
+  const paginationVariables = getPaginationVariables(request, {pageBy: 9});
 
   if (!params.blogHandle) {
     throw new Response(`blog not found`, {status: 404});
   }
 
-  const [{blog}] = await Promise.all([
-    context.storefront.query(BLOGS_QUERY, {
-      variables: {
-        blogHandle: params.blogHandle,
-        ...paginationVariables,
-      },
-    }),
-    // Add other queries here, so that they are loaded in parallel
-  ]);
+  const {blog} = await context.storefront.query(BLOG_QUERY, {
+    variables: {blogHandle: params.blogHandle, ...paginationVariables},
+    cache: context.storefront.CacheShort(),
+  });
 
   if (!blog?.articles) {
     throw new Response('Not found', {status: 404});
@@ -53,38 +41,76 @@ async function loadCriticalData({context, request, params}) {
 
   redirectIfHandleIsLocalized(request, {handle: params.blogHandle, data: blog});
 
-  return {blog};
-}
+  // Theme's "blog-posts" section (4 latest) only shows on the first page
+  const isFirstPage = !new URL(request.url).searchParams.has('cursor');
 
-/**
- * Load data for rendering content below the fold. This data is deferred and will be
- * fetched after the initial page load. If it's unavailable, the page should still 200.
- * Make sure to not throw any errors here, as it will cause the page to 500.
- * @param {Route.LoaderArgs}
- */
-function loadDeferredData({context}) {
-  return {};
+  return {blog, isFirstPage};
 }
 
 export default function Blog() {
   /** @type {LoaderReturnData} */
-  const {blog} = useLoaderData();
-  const {articles} = blog;
+  const {blog, isFirstPage} = useLoaderData();
+  const [featured, ...recent] = blog.latest.nodes;
 
   return (
     <div className="blog">
-      <h1>{blog.title}</h1>
-      <div className="blog-grid">
-        <PaginatedResourceSection connection={articles}>
-          {({node: article, index}) => (
+      {isFirstPage && featured && (
+        <section className="blog-posts">
+          <header className="blog-posts__header">
+            <p className="blog-posts__subheading">Aktuelle Beiträge</p>
+            <h1 className="blog-posts__title">{blog.title}</h1>
+          </header>
+          <div className="blog-posts__list">
             <ArticleItem
-              article={article}
-              key={article.id}
-              loading={index < 2 ? 'eager' : 'lazy'}
+              article={featured}
+              blogHandle={blog.handle}
+              variant="featured"
+              loading="eager"
             />
+            <div className="blog-posts__side">
+              {recent.map((article) => (
+                <ArticleItem
+                  key={article.id}
+                  article={article}
+                  blogHandle={blog.handle}
+                  variant="side"
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="blog-main">
+        {!isFirstPage && <h1 className="sr-only">{blog.title}</h1>}
+        <Pagination connection={blog.articles}>
+          {({nodes, isLoading, PreviousLink, NextLink, hasPreviousPage}) => (
+            <>
+              <div className="blog-grid">
+                {nodes.map((article, index) => (
+                  <ArticleItem
+                    key={article.id}
+                    article={article}
+                    blogHandle={blog.handle}
+                    loading={index < 3 && !isFirstPage ? 'eager' : 'lazy'}
+                    showExcerpt
+                  />
+                ))}
+              </div>
+              <nav className="blog-pagination" aria-label="Seitennummerierung">
+                {hasPreviousPage && (
+                  <PreviousLink className="blog-pagination__item" aria-label="Vorherige Seite">
+                    {isLoading ? '…' : <Arrow direction="left" />}
+                  </PreviousLink>
+                )}
+                <NextLink className="blog-pagination__item" aria-label="Nächste Seite">
+                  {isLoading ? '…' : <Arrow direction="right" />}
+                </NextLink>
+              </nav>
+            </>
           )}
-        </PaginatedResourceSection>
-      </div>
+        </Pagination>
+      </section>
     </div>
   );
 }
@@ -92,38 +118,63 @@ export default function Blog() {
 /**
  * @param {{
  *   article: ArticleItemFragment;
+ *   blogHandle: string;
+ *   variant?: 'featured' | 'side';
  *   loading?: HTMLImageElement['loading'];
+ *   showExcerpt?: boolean;
  * }}
  */
-function ArticleItem({article, loading}) {
-  const publishedAt = new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(new Date(article.publishedAt));
+function ArticleItem({article, blogHandle, variant, loading = 'lazy', showExcerpt}) {
+  const url = `/blogs/${blogHandle}/${article.handle}`;
   return (
-    <div className="blog-article" key={article.id}>
-      <Link to={`/blogs/${article.blog.handle}/${article.handle}`}>
-        {article.image && (
-          <div className="blog-article-image">
-            <Image
-              alt={article.image.altText || article.title}
-              aspectRatio="3/2"
-              data={article.image}
-              loading={loading}
-              sizes="(min-width: 768px) 50vw, 100vw"
-            />
-          </div>
+    <article
+      className={`article-item${variant ? ` article-item--${variant}` : ''}`}
+    >
+      {article.image && (
+        <Link to={url} prefetch="intent" className="article-item__image" tabIndex={-1}>
+          <Image
+            alt={article.image.altText || article.title}
+            data={article.image}
+            loading={loading}
+            aspectRatio={variant === 'featured' ? '16/9' : '3/2'}
+            sizes={
+              variant === 'featured'
+                ? '(min-width: 1000px) 640px, 100vw'
+                : '(min-width: 1000px) 380px, (min-width: 741px) 50vw, 100vw'
+            }
+          />
+        </Link>
+      )}
+      <div className="article-item__content">
+        <h2 className="article-item__title">
+          <Link to={url} prefetch="intent">
+            {article.title}
+          </Link>
+        </h2>
+        {showExcerpt && article.excerpt && (
+          <p className="article-item__excerpt">{article.excerpt}</p>
         )}
-        <h3>{article.title}</h3>
-        <small>{publishedAt}</small>
-      </Link>
-    </div>
+      </div>
+    </article>
+  );
+}
+
+/** @param {{direction: 'left' | 'right'}} */
+function Arrow({direction}) {
+  return (
+    <svg width="17" height="14" viewBox="0 0 17 14" aria-hidden="true">
+      <path
+        d={direction === 'right' ? 'M0 7h15M9 1l6 6-6 6' : 'M17 7H2M8 1 2 7l6 6'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+    </svg>
   );
 }
 
 // NOTE: https://shopify.dev/docs/api/storefront/latest/objects/blog
-const BLOGS_QUERY = `#graphql
+const BLOG_QUERY = `#graphql
   query Blog(
     $language: LanguageCode
     $blogHandle: String!
@@ -139,11 +190,18 @@ const BLOGS_QUERY = `#graphql
         title
         description
       }
+      latest: articles(first: 4, sortKey: PUBLISHED_AT, reverse: true) {
+        nodes {
+          ...ArticleItem
+        }
+      }
       articles(
-        first: $first,
-        last: $last,
-        before: $startCursor,
+        first: $first
+        last: $last
+        before: $startCursor
         after: $endCursor
+        sortKey: PUBLISHED_AT
+        reverse: true
       ) {
         nodes {
           ...ArticleItem
@@ -151,19 +209,14 @@ const BLOGS_QUERY = `#graphql
         pageInfo {
           hasPreviousPage
           hasNextPage
-          hasNextPage
           endCursor
           startCursor
         }
-
       }
     }
   }
   fragment ArticleItem on Article {
-    author: authorV2 {
-      name
-    }
-    contentHtml
+    excerpt
     handle
     id
     image {
@@ -175,9 +228,6 @@ const BLOGS_QUERY = `#graphql
     }
     publishedAt
     title
-    blog {
-      handle
-    }
   }
 `;
 

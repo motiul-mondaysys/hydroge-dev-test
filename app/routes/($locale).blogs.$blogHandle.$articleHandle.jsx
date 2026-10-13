@@ -1,30 +1,31 @@
-import {useLoaderData} from 'react-router';
+import {Link, useLoaderData} from 'react-router';
 import {Image} from '@shopify/hydrogen';
+import {ShareLinks} from '~/components/FeaturedProduct';
 import {redirectIfHandleIsLocalized} from '~/lib/redirect';
 
 /**
  * @type {Route.MetaFunction}
  */
 export const meta = ({data}) => {
-  return [{title: `Hydrogen | ${data?.article.title ?? ''} article`}];
+  const article = data?.article;
+  return [
+    {title: `${article?.seo?.title || article?.title || ''} | Viktilabs`},
+    {
+      name: 'description',
+      content: article?.seo?.description || article?.excerpt || '',
+    },
+  ];
 };
 
 /**
  * @param {Route.LoaderArgs} args
  */
 export async function loader(args) {
-  // Start fetching non-critical data without blocking time to first byte
-  const deferredData = loadDeferredData(args);
-
-  // Await the critical data required to render initial state of the page
   const criticalData = await loadCriticalData(args);
-
-  return {...deferredData, ...criticalData};
+  return {...criticalData};
 }
 
 /**
- * Load data necessary for rendering content above the fold. This is the critical data
- * needed to render the page. If it's unavailable, the whole page should 400 or 500 error.
  * @param {Route.LoaderArgs}
  */
 async function loadCriticalData({context, request, params}) {
@@ -34,12 +35,10 @@ async function loadCriticalData({context, request, params}) {
     throw new Response('Not found', {status: 404});
   }
 
-  const [{blog}] = await Promise.all([
-    context.storefront.query(ARTICLE_QUERY, {
-      variables: {blogHandle, articleHandle},
-    }),
-    // Add other queries here, so that they are loaded in parallel
-  ]);
+  const {blog} = await context.storefront.query(ARTICLE_QUERY, {
+    variables: {blogHandle, articleHandle},
+    cache: context.storefront.CacheShort(),
+  });
 
   if (!blog?.articleByHandle) {
     throw new Response(null, {status: 404});
@@ -47,58 +46,51 @@ async function loadCriticalData({context, request, params}) {
 
   redirectIfHandleIsLocalized(
     request,
-    {
-      handle: articleHandle,
-      data: blog.articleByHandle,
-    },
-    {
-      handle: blogHandle,
-      data: blog,
-    },
+    {handle: articleHandle, data: blog.articleByHandle},
+    {handle: blogHandle, data: blog},
   );
 
-  const article = blog.articleByHandle;
-
-  return {article};
-}
-
-/**
- * Load data for rendering content below the fold. This data is deferred and will be
- * fetched after the initial page load. If it's unavailable, the page should still 200.
- * Make sure to not throw any errors here, as it will cause the page to 500.
- * @param {Route.LoaderArgs}
- */
-function loadDeferredData({context}) {
-  return {};
+  return {article: blog.articleByHandle, blog};
 }
 
 export default function Article() {
   /** @type {LoaderReturnData} */
-  const {article} = useLoaderData();
-  const {title, image, contentHtml, author} = article;
-
-  const publishedDate = new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(new Date(article.publishedAt));
+  const {article, blog} = useLoaderData();
+  const {title, image, contentHtml} = article;
+  const blogUrl = `/blogs/${blog.handle}`;
 
   return (
-    <div className="article">
-      <h1>
-        {title}
-        <div>
-          <time dateTime={article.publishedAt}>{publishedDate}</time> &middot;{' '}
-          <address>{author?.name}</address>
+    <article className="article">
+      <header className="article-banner">
+        <div className="article-banner__content">
+          <nav className="article-banner__breadcrumb" aria-label="Breadcrumb">
+            <Link to="/">Start</Link> / <Link to={blogUrl}>{blog.title}</Link>{' '}
+            / <span aria-current="page">{title}</span>
+          </nav>
+          <h1 className="article-banner__title">{title}</h1>
         </div>
-      </h1>
+        {image && (
+          <div className="article-banner__image">
+            <Image
+              data={image}
+              alt={image.altText || title}
+              sizes="(min-width: 1000px) 50vw, 100vw"
+              loading="eager"
+            />
+          </div>
+        )}
+      </header>
 
-      {image && <Image data={image} sizes="90vw" loading="eager" />}
-      <div
-        dangerouslySetInnerHTML={{__html: contentHtml}}
-        className="article"
-      />
-    </div>
+      <div className="article__inner">
+        <div className="article__aside">
+          <ShareLinks title={title} path={`${blogUrl}/${article.handle}`} />
+        </div>
+        <div
+          className="article__content rte"
+          dangerouslySetInnerHTML={{__html: contentHtml}}
+        />
+      </div>
+    </article>
   );
 }
 
@@ -112,14 +104,13 @@ const ARTICLE_QUERY = `#graphql
   ) @inContext(language: $language, country: $country) {
     blog(handle: $blogHandle) {
       handle
+      title
       articleByHandle(handle: $articleHandle) {
         handle
         title
         contentHtml
+        excerpt
         publishedAt
-        author: authorV2 {
-          name
-        }
         image {
           id
           altText
