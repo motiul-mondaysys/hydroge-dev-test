@@ -1,10 +1,10 @@
-import {Link, useLoaderData} from 'react-router';
+import {useLoaderData} from 'react-router';
 
 /**
  * @type {Route.MetaFunction}
  */
 export const meta = ({data}) => {
-  return [{title: `Hydrogen | ${data?.policy.title ?? ''}`}];
+  return [{title: `${data?.policy.title ?? ''} | Viktilabs`}];
 };
 
 /**
@@ -13,6 +13,15 @@ export const meta = ({data}) => {
 export async function loader({params, context}) {
   if (!params.handle) {
     throw new Response('No handle was passed in', {status: 404});
+  }
+
+  // Impressum lives in a page: the Storefront API has no legal notice policy
+  if (params.handle === 'legal-notice') {
+    const {page} = await context.storefront.query(LEGAL_NOTICE_QUERY, {
+      variables: {handle: 'impressum'},
+    });
+    if (!page) throw new Response('Could not find the policy', {status: 404});
+    return {policy: {title: page.title, body: page.body}};
   }
 
   const policyName = params.handle.replace(/-([a-z])/g, (_, m1) =>
@@ -44,18 +53,30 @@ export default function Policy() {
   const {policy} = useLoaderData();
 
   return (
-    <div className="policy">
-      <br />
-      <br />
-      <div>
-        <Link to="/policies">← Back to Policies</Link>
-      </div>
-      <br />
-      <h1>{policy.title}</h1>
-      <div dangerouslySetInnerHTML={{__html: policy.body}} />
+    <div className="content-page">
+      <header className="content-page__header">
+        <h1 className="content-page__title">{policy.title}</h1>
+      </header>
+      <div
+        className="content-page__body rte"
+        dangerouslySetInnerHTML={{__html: policy.body}}
+      />
     </div>
   );
 }
+
+const LEGAL_NOTICE_QUERY = `#graphql
+  query LegalNoticePage(
+    $handle: String!
+    $country: CountryCode
+    $language: LanguageCode
+  ) @inContext(language: $language, country: $country) {
+    page(handle: $handle) {
+      title
+      body
+    }
+  }
+`;
 
 // NOTE: https://shopify.dev/docs/api/storefront/latest/objects/Shop
 const POLICY_CONTENT_QUERY = `#graphql

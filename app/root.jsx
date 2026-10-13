@@ -10,11 +10,13 @@ import {
   useRouteLoaderData,
 } from 'react-router';
 import favicon from '~/assets/favicon.svg';
-import {FOOTER_QUERY, HEADER_QUERY} from '~/lib/fragments';
+import {HEADER_QUERY} from '~/lib/fragments';
 import resetStyles from '~/styles/reset.css?url';
 import appStyles from '~/styles/app.css?url';
+import sectionStyles from '~/styles/sections.css?url';
 import tailwindCss from './styles/tailwind.css?url';
 import {PageLayout} from './components/PageLayout';
+import {FEATURED_PRODUCT_QUERY} from '~/components/FeaturedProduct';
 
 /**
  * This is important to avoid re-fetching root queries on sub-navigations
@@ -54,6 +56,16 @@ export function links() {
     {
       rel: 'preconnect',
       href: 'https://shop.app',
+    },
+    {rel: 'preconnect', href: 'https://fonts.googleapis.com'},
+    {
+      rel: 'preconnect',
+      href: 'https://fonts.gstatic.com',
+      crossOrigin: 'anonymous',
+    },
+    {
+      rel: 'stylesheet',
+      href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@600&display=swap',
     },
     {rel: 'icon', type: 'image/svg+xml', href: favicon},
   ];
@@ -100,7 +112,8 @@ async function loadCriticalData({context}) {
 
   const [header] = await Promise.all([
     storefront.query(HEADER_QUERY, {
-      cache: storefront.CacheLong(),
+      // Menu edits in admin show within a minute
+      cache: storefront.CacheCustom({maxAge: 60, staleWhileRevalidate: 3600}),
       variables: {
         headerMenuHandle: 'main-menu', // Adjust to your header menu handle
       },
@@ -118,25 +131,29 @@ async function loadCriticalData({context}) {
  * @param {Route.LoaderArgs}
  */
 function loadDeferredData({context}) {
-  const {storefront, customerAccount, cart} = context;
+  const {storefront, customerAccount, cart, env} = context;
 
-  // defer the footer query (below the fold)
-  const footer = storefront
-    .query(FOOTER_QUERY, {
-      cache: storefront.CacheLong(),
-      variables: {
-        footerMenuHandle: 'footer', // Adjust to your footer menu handle
-      },
+  // "NEU" section from the theme's footer group
+  const featuredProduct = storefront
+    .query(FEATURED_PRODUCT_QUERY, {
+      cache: storefront.CacheShort(),
+      variables: {handle: 'gehirn-komplex-daily'},
     })
+    .then(({product}) => product)
     .catch((error) => {
-      // Log query errors, but don't throw them so the page can still render
       console.error(error);
       return null;
     });
+
   return {
     cart: cart.get(),
     isLoggedIn: customerAccount.isLoggedIn(),
-    footer,
+    featuredProduct,
+    // Newsletter signups stay off unless both are set (keeps test emails out of the live list)
+    klaviyo: {
+      companyId: env.PUBLIC_KLAVIYO_COMPANY_ID,
+      listId: env.PUBLIC_KLAVIYO_LIST_ID,
+    },
   };
 }
 
@@ -147,13 +164,14 @@ export function Layout({children}) {
   const nonce = useNonce();
 
   return (
-    <html lang="en">
+    <html lang="de">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <link rel="stylesheet" href={tailwindCss}></link>
         <link rel="stylesheet" href={resetStyles}></link>
         <link rel="stylesheet" href={appStyles}></link>
+        <link rel="stylesheet" href={sectionStyles}></link>
         <Meta />
         <Links />
       </head>

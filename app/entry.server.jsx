@@ -22,6 +22,37 @@ export default async function handleRequest(
       checkoutDomain: context.env.PUBLIC_CHECKOUT_DOMAIN,
       storeDomain: context.env.PUBLIC_STORE_DOMAIN,
     },
+    scriptSrc: [
+      "'self'",
+      'https://cdn.shopify.com',
+      'https://widget.reviews.io',
+    ],
+    styleSrc: [
+      "'self'",
+      'https://cdn.shopify.com',
+      'https://fonts.googleapis.com',
+      'https://widget.reviews.io',
+      'https://assets.reviews.io',
+    ],
+    fontSrc: [
+      "'self'",
+      'https://fonts.gstatic.com',
+      'https://assets.reviews.io',
+    ],
+    imgSrc: [
+      "'self'",
+      'data:',
+      'https://cdn.shopify.com',
+      'https://*.reviews.io',
+      'https://*.reviews.co.uk',
+    ],
+    connectSrc: [
+      'https://a.klaviyo.com',
+      "'self'",
+      'https://api.reviews.io',
+      'https://widget.reviews.io',
+      'https://*.reviews.io',
+    ],
   });
 
   const body = await renderToReadableStream(

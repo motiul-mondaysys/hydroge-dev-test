@@ -5,7 +5,7 @@ import {redirectIfHandleIsLocalized} from '~/lib/redirect';
  * @type {Route.MetaFunction}
  */
 export const meta = ({data}) => {
-  return [{title: `Hydrogen | ${data?.page.title ?? ''}`}];
+  return [{title: `${data?.page.title ?? ''} | Viktilabs`}];
 };
 
 /**
@@ -57,7 +57,7 @@ async function loadCriticalData({context, request, params}) {
  * Make sure to not throw any errors here, as it will cause the page to 500.
  * @param {Route.LoaderArgs}
  */
-function loadDeferredData({context}) {
+function loadDeferredData() {
   return {};
 }
 
@@ -66,11 +66,14 @@ export default function Page() {
   const {page} = useLoaderData();
 
   return (
-    <div className="page">
-      <header>
-        <h1>{page.title}</h1>
+    <div className="content-page">
+      <header className="content-page__header">
+        <h1 className="content-page__title">{page.title}</h1>
       </header>
-      <main dangerouslySetInnerHTML={{__html: page.body}} />
+      <div
+        className="content-page__body rte"
+        dangerouslySetInnerHTML={{__html: page.body}}
+      />
     </div>
   );
 }

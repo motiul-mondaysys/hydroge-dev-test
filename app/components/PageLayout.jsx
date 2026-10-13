@@ -2,6 +2,7 @@ import {Await, Link} from 'react-router';
 import {Suspense, useId} from 'react';
 import {Aside} from '~/components/Aside';
 import {Footer} from '~/components/Footer';
+import {FeaturedProduct} from '~/components/FeaturedProduct';
 import {Header, HeaderMenu} from '~/components/Header';
 import {CartMain} from '~/components/CartMain';
 import {
@@ -16,7 +17,8 @@ import {SearchResultsPredictive} from '~/components/SearchResultsPredictive';
 export function PageLayout({
   cart,
   children = null,
-  footer,
+  featuredProduct,
+  klaviyo,
   header,
   isLoggedIn,
   publicStoreDomain,
@@ -35,11 +37,12 @@ export function PageLayout({
         />
       )}
       <main>{children}</main>
-      <Footer
-        footer={footer}
-        header={header}
-        publicStoreDomain={publicStoreDomain}
-      />
+      <Suspense>
+        <Await resolve={featuredProduct}>
+          {(product) => <FeaturedProduct title="NEU" product={product} />}
+        </Await>
+      </Suspense>
+      <Footer klaviyo={klaviyo} />
     </Aside.Provider>
   );
 }
@@ -168,7 +171,8 @@ function MobileMenuAside({header, publicStoreDomain}) {
 /**
  * @typedef {Object} PageLayoutProps
  * @property {Promise<CartApiQueryFragment|null>} cart
- * @property {Promise<FooterQuery|null>} footer
+ * @property {Promise<FeaturedProductFragment|null>} featuredProduct
+ * @property {{companyId?: string; listId?: string}} klaviyo
  * @property {HeaderQuery} header
  * @property {Promise<boolean>} isLoggedIn
  * @property {string} publicStoreDomain
@@ -176,5 +180,5 @@ function MobileMenuAside({header, publicStoreDomain}) {
  */
 
 /** @typedef {import('storefrontapi.generated').CartApiQueryFragment} CartApiQueryFragment */
-/** @typedef {import('storefrontapi.generated').FooterQuery} FooterQuery */
 /** @typedef {import('storefrontapi.generated').HeaderQuery} HeaderQuery */
+/** @typedef {import('storefrontapi.generated').FeaturedProductFragment} FeaturedProductFragment */

@@ -209,6 +209,9 @@ export const HEADER_QUERY = `#graphql
       logo {
         image {
           url
+          altText
+          width
+          height
         }
       }
     }
