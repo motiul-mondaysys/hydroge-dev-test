@@ -188,7 +188,7 @@ export function FeaturedProduct({title, product}) {
 /**
  * @param {{title: string; path: string}}
  */
-function ShareLinks({title, path}) {
+export function ShareLinks({title, path}) {
   const url = encodeURIComponent(`https://www.viktilabs.de${path}`);
   const text = encodeURIComponent(title);
   const links = [
