@@ -34,6 +34,15 @@ export const CART_QUERY_FRAGMENT = `#graphql
         }
         requiresShipping
         title
+        unitPrice {
+          ...Money
+        }
+        unitPriceMeasurement {
+          quantityValue
+          quantityUnit
+          referenceValue
+          referenceUnit
+        }
         image {
           id
           url
@@ -90,6 +99,15 @@ export const CART_QUERY_FRAGMENT = `#graphql
         }
         requiresShipping
         title
+        unitPrice {
+          ...Money
+        }
+        unitPriceMeasurement {
+          quantityValue
+          quantityUnit
+          referenceValue
+          referenceUnit
+        }
         image {
           id
           url
@@ -234,10 +252,14 @@ export const HEADER_QUERY = `#graphql
 export const FOOTER_QUERY = `#graphql
   query Footer(
     $country: CountryCode
-    $footerMenuHandle: String!
     $language: LanguageCode
   ) @inContext(language: $language, country: $country) {
-    menu(handle: $footerMenuHandle) {
+    overview: menu(handle: "footer") {
+      title
+      ...Menu
+    }
+    legal: menu(handle: "rechtliches") {
+      title
       ...Menu
     }
   }

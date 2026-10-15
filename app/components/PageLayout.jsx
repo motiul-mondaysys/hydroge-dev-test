@@ -4,7 +4,7 @@ import {Aside} from '~/components/Aside';
 import {Footer} from '~/components/Footer';
 import {FeaturedProduct} from '~/components/FeaturedProduct';
 import {Header, HeaderMenu} from '~/components/Header';
-import {CartMain} from '~/components/CartMain';
+import {CartDrawer} from '~/components/CartDrawer';
 import {
   SEARCH_ENDPOINT,
   SearchFormPredictive,
@@ -18,6 +18,7 @@ export function PageLayout({
   cart,
   children = null,
   featuredProduct,
+  footer,
   klaviyo,
   header,
   isLoggedIn,
@@ -42,7 +43,12 @@ export function PageLayout({
           {(product) => <FeaturedProduct title="NEU" product={product} />}
         </Await>
       </Suspense>
-      <Footer klaviyo={klaviyo} />
+      <Footer
+        footer={footer}
+        klaviyo={klaviyo}
+        header={header}
+        publicStoreDomain={publicStoreDomain}
+      />
     </Aside.Provider>
   );
 }
@@ -52,15 +58,9 @@ export function PageLayout({
  */
 function CartAside({cart}) {
   return (
-    <Aside type="cart" heading="CART">
-      <Suspense fallback={<p>Loading cart ...</p>}>
-        <Await resolve={cart}>
-          {(cart) => {
-            return <CartMain cart={cart} layout="aside" />;
-          }}
-        </Await>
-      </Suspense>
-    </Aside>
+    <Suspense>
+      <Await resolve={cart}>{(cart) => <CartDrawer cart={cart} />}</Await>
+    </Suspense>
   );
 }
 
@@ -172,6 +172,7 @@ function MobileMenuAside({header, publicStoreDomain}) {
  * @typedef {Object} PageLayoutProps
  * @property {Promise<CartApiQueryFragment|null>} cart
  * @property {Promise<FeaturedProductFragment|null>} featuredProduct
+ * @property {Promise<FooterQuery|null>} footer
  * @property {{companyId?: string; listId?: string}} klaviyo
  * @property {HeaderQuery} header
  * @property {Promise<boolean>} isLoggedIn
@@ -181,4 +182,5 @@ function MobileMenuAside({header, publicStoreDomain}) {
 
 /** @typedef {import('storefrontapi.generated').CartApiQueryFragment} CartApiQueryFragment */
 /** @typedef {import('storefrontapi.generated').HeaderQuery} HeaderQuery */
+/** @typedef {import('storefrontapi.generated').FooterQuery} FooterQuery */
 /** @typedef {import('storefrontapi.generated').FeaturedProductFragment} FeaturedProductFragment */

@@ -1,96 +1,171 @@
 import {redirect, useLoaderData} from 'react-router';
-import {getPaginationVariables, Analytics} from '@shopify/hydrogen';
-import {PaginatedResourceSection} from '~/components/PaginatedResourceSection';
+import {Analytics} from '@shopify/hydrogen';
 import {redirectIfHandleIsLocalized} from '~/lib/redirect';
-import {ProductItem} from '~/components/ProductItem';
+import {PRODUCT_CARD_FRAGMENT} from '~/components/ProductCard';
+import {
+  CollectionAdvantages,
+  CollectionBanner,
+  CollectionPromos,
+} from '~/components/collection/CollectionSections';
+import {CollectionProducts} from '~/components/collection/CollectionProducts';
+import {productsPerPage, sortOptions} from '~/data/collection';
+import {
+  filterGroupsFromApi,
+  productFiltersFromUrl,
+} from '~/lib/collectionFilters';
 
 /**
  * @type {Route.MetaFunction}
  */
 export const meta = ({data}) => {
-  return [{title: `Hydrogen | ${data?.collection.title ?? ''} Collection`}];
+  const collection = data?.collection;
+  return [
+    {title: `${collection?.seo?.title || collection?.title || ''} | Viktilabs`},
+    {
+      name: 'description',
+      content: collection?.seo?.description || collection?.description || '',
+    },
+  ];
+};
+
+// Theme sort_by values → Storefront API sort keys
+const SORT_KEYS = {
+  manual: {sortKey: 'COLLECTION_DEFAULT', reverse: false},
+  'best-selling': {sortKey: 'BEST_SELLING', reverse: false},
+  'title-ascending': {sortKey: 'TITLE', reverse: false},
+  'title-descending': {sortKey: 'TITLE', reverse: true},
+  'price-ascending': {sortKey: 'PRICE', reverse: false},
+  'price-descending': {sortKey: 'PRICE', reverse: true},
+  'created-ascending': {sortKey: 'CREATED', reverse: false},
+  'created-descending': {sortKey: 'CREATED', reverse: true},
 };
 
 /**
  * @param {Route.LoaderArgs} args
  */
 export async function loader(args) {
-  // Start fetching non-critical data without blocking time to first byte
-  const deferredData = loadDeferredData(args);
-
-  // Await the critical data required to render initial state of the page
   const criticalData = await loadCriticalData(args);
-
-  return {...deferredData, ...criticalData};
+  return {...criticalData};
 }
 
 /**
- * Load data necessary for rendering content above the fold. This is the critical data
- * needed to render the page. If it's unavailable, the whole page should 400 or 500 error.
+ * Loads every filtered product of the collection (in sort order) for numbered pages; filters come from Search & Discovery
  * @param {Route.LoaderArgs}
  */
 async function loadCriticalData({context, params, request}) {
   const {handle} = params;
   const {storefront} = context;
-  const paginationVariables = getPaginationVariables(request, {
-    pageBy: 8,
-  });
+  const searchParams = new URL(request.url).searchParams;
 
   if (!handle) {
     throw redirect('/collections');
   }
 
-  const [{collection}] = await Promise.all([
-    storefront.query(COLLECTION_QUERY, {
-      variables: {handle, ...paginationVariables},
-      // Add other queries here, so that they are loaded in parallel
-    }),
-  ]);
+  const sortBy = SORT_KEYS[searchParams.get('sort_by')]
+    ? searchParams.get('sort_by')
+    : 'manual';
 
-  if (!collection) {
-    throw new Response(`Collection ${handle} not found`, {
-      status: 404,
+  // Filter values carry the API `input`, so the definitions are needed to translate URL params
+  const hasFilterParams = [...searchParams.keys()].some((key) =>
+    key.startsWith('filter.'),
+  );
+  const definitions = hasFilterParams
+    ? await storefront.query(COLLECTION_FILTERS_QUERY, {
+        variables: {handle},
+        cache: storefront.CacheShort(),
+      })
+    : null;
+  const filters = productFiltersFromUrl(
+    definitions?.collection?.products.filters ?? [],
+    searchParams,
+  );
+
+  let collection = null;
+  let menu = null;
+  let apiFilters = [];
+  let iconsData = null;
+  const products = [];
+  let after = null;
+  // Up to 1000 products; the shop's largest collection has ~110
+  for (let i = 0; i < 4; i++) {
+    const data = await storefront.query(COLLECTION_QUERY, {
+      variables: {handle, after, filters, ...SORT_KEYS[sortBy]},
+      cache: storefront.CacheShort(),
     });
+    if (!data.collection) break;
+    collection ??= data.collection;
+    menu ??= data.menu;
+    if (!after) {
+      apiFilters = data.collection.products.filters;
+      iconsData = data.filterIcons;
+    }
+    products.push(...data.collection.products.nodes);
+    const {hasNextPage, endCursor} = data.collection.products.pageInfo;
+    if (!hasNextPage) break;
+    after = endCursor;
   }
 
-  // The API handle might be localized, so redirect to the localized handle
+  if (!collection) {
+    throw new Response(`Collection ${handle} not found`, {status: 404});
+  }
+
   redirectIfHandleIsLocalized(request, {handle, data: collection});
 
+  const {groups, activeCount} = filterGroupsFromApi(
+    apiFilters,
+    searchParams,
+    filterIcons(iconsData),
+    definitions?.collection?.products.filters,
+  );
+  const pageCount = Math.max(1, Math.ceil(products.length / productsPerPage));
+  const page = Math.min(
+    Math.max(1, Number(searchParams.get('page')) || 1),
+    pageCount,
+  );
+
   return {
-    collection,
+    collection: {
+      id: collection.id,
+      handle: collection.handle,
+      title: collection.title,
+      description: collection.description,
+      seo: collection.seo,
+    },
+    products: products.slice(
+      (page - 1) * productsPerPage,
+      page * productsPerPage,
+    ),
+    productCount: products.length,
+    page,
+    pageCount,
+    filterGroups: groups,
+    activeCount,
+    categories: menu?.items ?? [],
+    sortBy,
   };
 }
 
-/**
- * Load data for rendering content below the fold. This data is deferred and will be
- * fetched after the initial page load. If it's unavailable, the page should still 200.
- * Make sure to not throw any errors here, as it will cause the page to 500.
- * @param {Route.LoaderArgs}
- */
-function loadDeferredData({context}) {
-  return {};
+/** Live theme's shop_filters_icons metaobject → "group|value" → icon URL */
+function filterIcons(data) {
+  const icons = new Map();
+  for (const item of data?.icons?.references?.nodes ?? []) {
+    const url = item.icon?.reference?.image?.url;
+    if (url) icons.set(`${item.group?.value}|${item.name?.value}`, url);
+  }
+  return icons;
 }
 
 export default function Collection() {
   /** @type {LoaderReturnData} */
-  const {collection} = useLoaderData();
+  const data = useLoaderData();
+  const {collection} = data;
 
   return (
-    <div className="collection">
-      <h1>{collection.title}</h1>
-      <p className="collection-description">{collection.description}</p>
-      <PaginatedResourceSection
-        connection={collection.products}
-        resourcesClassName="products-grid"
-      >
-        {({node: product, index}) => (
-          <ProductItem
-            key={product.id}
-            product={product}
-            loading={index < 8 ? 'eager' : undefined}
-          />
-        )}
-      </PaginatedResourceSection>
+    <div className="collection-page">
+      <CollectionBanner />
+      <CollectionAdvantages />
+      <CollectionPromos />
+      <CollectionProducts {...data} sortOptions={sortOptions} />
       <Analytics.CollectionView
         data={{
           collection: {
@@ -103,70 +178,120 @@ export default function Collection() {
   );
 }
 
-const PRODUCT_ITEM_FRAGMENT = `#graphql
-  fragment MoneyProductItem on MoneyV2 {
-    amount
-    currencyCode
-  }
-  fragment ProductItem on Product {
+const COLLECTION_FILTER_FRAGMENT = `#graphql
+  fragment CollectionFilter on Filter {
     id
-    handle
-    title
-    featuredImage {
+    label
+    type
+    values {
       id
-      altText
-      url
-      width
-      height
-    }
-    priceRange {
-      minVariantPrice {
-        ...MoneyProductItem
-      }
-      maxVariantPrice {
-        ...MoneyProductItem
-      }
+      label
+      count
+      input
     }
   }
 `;
 
-// NOTE: https://shopify.dev/docs/api/storefront/2022-04/objects/collection
+// NOTE: https://shopify.dev/docs/api/storefront/latest/objects/collection
 const COLLECTION_QUERY = `#graphql
-  ${PRODUCT_ITEM_FRAGMENT}
   query Collection(
     $handle: String!
     $country: CountryCode
     $language: LanguageCode
-    $first: Int
-    $last: Int
-    $startCursor: String
-    $endCursor: String
+    $sortKey: ProductCollectionSortKeys
+    $reverse: Boolean
+    $after: String
+    $filters: [ProductFilter!]
   ) @inContext(country: $country, language: $language) {
     collection(handle: $handle) {
       id
       handle
       title
       description
+      seo {
+        title
+        description
+      }
       products(
-        first: $first,
-        last: $last,
-        before: $startCursor,
-        after: $endCursor
+        first: 250
+        after: $after
+        sortKey: $sortKey
+        reverse: $reverse
+        filters: $filters
       ) {
+        filters {
+          ...CollectionFilter
+        }
         nodes {
-          ...ProductItem
+          ...ProductCard
         }
         pageInfo {
-          hasPreviousPage
           hasNextPage
           endCursor
-          startCursor
+        }
+      }
+    }
+    filterIcons: metaobject(
+      handle: {type: "shop_filters_icons", handle: "shop-filters-icons"}
+    ) {
+      icons: field(key: "icons") {
+        references(first: 100) {
+          nodes {
+            ... on Metaobject {
+              group: field(key: "filter_group") {
+                value
+              }
+              name: field(key: "filter_name") {
+                value
+              }
+              icon: field(key: "icon") {
+                reference {
+                  ... on MediaImage {
+                    image {
+                      url
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    menu(handle: "kategorien-v2") {
+      items {
+        id
+        title
+        url
+        resource {
+          ... on Collection {
+            handle
+          }
         }
       }
     }
   }
+  ${PRODUCT_CARD_FRAGMENT}
+  ${COLLECTION_FILTER_FRAGMENT}
+`;
+
+// Unfiltered filter definitions, to map URL params to `ProductFilter` inputs
+const COLLECTION_FILTERS_QUERY = `#graphql
+  query CollectionFilters(
+    $handle: String!
+    $country: CountryCode
+    $language: LanguageCode
+  ) @inContext(country: $country, language: $language) {
+    collection(handle: $handle) {
+      products(first: 1) {
+        filters {
+          ...CollectionFilter
+        }
+      }
+    }
+  }
+  ${COLLECTION_FILTER_FRAGMENT}
 `;
 
 /** @typedef {import('./+types/collections.$handle').Route} Route */
-/** @typedef {import('storefrontapi.generated').ProductItemFragment} ProductItemFragment */
 /** @typedef {ReturnType<typeof useLoaderData<typeof loader>>} LoaderReturnData */

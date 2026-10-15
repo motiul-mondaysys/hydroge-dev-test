@@ -29,11 +29,11 @@ export function BenefitsCompare({content}) {
 
 /**
  * @param {{
- *   column: {title: string; items: string[]; link: {label: string; url: string}};
+ *   column: {title: string; items: string[]; link?: {label: string; url: string}};
  *   variant: 'ours' | 'others';
  * }}
  */
-function BenefitsColumn({column, variant}) {
+export function BenefitsColumn({column, variant}) {
   return (
     <div
       className={`benefits-compare__column benefits-compare__column--${variant}`}
@@ -46,10 +46,12 @@ function BenefitsColumn({column, variant}) {
             <span>{item}</span>
           </li>
         ))}
-        <li>
-          <CompareIcon variant={variant} />
-          <Link to={column.link.url}>{column.link.label}</Link>
-        </li>
+        {column.link && (
+          <li>
+            <CompareIcon variant={variant} />
+            <Link to={column.link.url}>{column.link.label}</Link>
+          </li>
+        )}
       </ul>
     </div>
   );
