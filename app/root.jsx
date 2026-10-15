@@ -9,11 +9,14 @@ import {
   ScrollRestoration,
   useRouteLoaderData,
 } from 'react-router';
-import favicon from '~/assets/favicon.svg';
-import {HEADER_QUERY} from '~/lib/fragments';
+import favicon from '~/assets/favicon.png';
+import {FOOTER_QUERY, HEADER_QUERY} from '~/lib/fragments';
 import resetStyles from '~/styles/reset.css?url';
 import appStyles from '~/styles/app.css?url';
 import sectionStyles from '~/styles/sections.css?url';
+import productStyles from '~/styles/product.css?url';
+import collectionStyles from '~/styles/collection.css?url';
+import cartStyles from '~/styles/cart.css?url';
 import tailwindCss from './styles/tailwind.css?url';
 import {PageLayout} from './components/PageLayout';
 import {FEATURED_PRODUCT_QUERY} from '~/components/FeaturedProduct';
@@ -145,10 +148,21 @@ function loadDeferredData({context}) {
       return null;
     });
 
+  // Footer menus "footer" (Übersicht) + "rechtliches" from Shopify navigation
+  const footer = storefront
+    .query(FOOTER_QUERY, {
+      cache: storefront.CacheCustom({maxAge: 60, staleWhileRevalidate: 3600}),
+    })
+    .catch((error) => {
+      console.error(error);
+      return null;
+    });
+
   return {
     cart: cart.get(),
     isLoggedIn: customerAccount.isLoggedIn(),
     featuredProduct,
+    footer,
     // Newsletter signups stay off unless both are set (keeps test emails out of the live list)
     klaviyo: {
       companyId: env.PUBLIC_KLAVIYO_COMPANY_ID,
@@ -172,6 +186,9 @@ export function Layout({children}) {
         <link rel="stylesheet" href={resetStyles}></link>
         <link rel="stylesheet" href={appStyles}></link>
         <link rel="stylesheet" href={sectionStyles}></link>
+        <link rel="stylesheet" href={productStyles}></link>
+        <link rel="stylesheet" href={collectionStyles}></link>
+        <link rel="stylesheet" href={cartStyles}></link>
         <Meta />
         <Links />
       </head>

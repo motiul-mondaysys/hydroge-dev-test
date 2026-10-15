@@ -1,9 +1,8 @@
-import {useState} from 'react';
-import {Link, useLocation, useNavigate} from 'react-router';
+import {Suspense, useState} from 'react';
+import {Await, Link, useLocation, useNavigate} from 'react-router';
 import {
   footerContact,
   footerLanguages,
-  footerMenus,
   footerNewsletter,
 } from '~/data/footer';
 import amex from '~/assets/payment/amex.svg';
@@ -17,7 +16,7 @@ import paypal from '~/assets/payment/paypal.svg';
 import unionpay from '~/assets/payment/unionpay.svg';
 import visa from '~/assets/payment/visa.svg';
 
-const PAYMENT_ICONS = [
+export const PAYMENT_ICONS = [
   {name: 'American Express', src: amex},
   {name: 'Bancontact', src: bancontact},
   {name: 'EPS', src: eps},
@@ -34,29 +33,28 @@ const PAYMENT_ICONS = [
  * Port of sections/footer.liquid
  * @param {FooterProps}
  */
-export function Footer({klaviyo}) {
+export function Footer({footer, header, klaviyo, publicStoreDomain}) {
   return (
     <footer className="footer">
       <div className="footer__inner">
         <div className="footer__columns">
-          {footerMenus.map((menu) => (
-            <div key={menu.title} className="footer__column">
-              <p className="footer__title">{menu.title}</p>
-              <ul className="footer__links list--unstyled">
-                {menu.links.map((link) => (
-                  <li key={link.title}>
-                    <Link
-                      className={link.highlight ? 'footer__link--boxed' : ''}
-                      to={link.url}
-                      prefetch="intent"
-                    >
-                      {link.title}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <Suspense>
+            <Await resolve={footer}>
+              {(data) =>
+                [data?.overview, data?.legal].map(
+                  (menu) =>
+                    menu && (
+                      <FooterMenu
+                        key={menu.id}
+                        menu={menu}
+                        primaryDomainUrl={header?.shop.primaryDomain.url}
+                        publicStoreDomain={publicStoreDomain}
+                      />
+                    ),
+                )
+              }
+            </Await>
+          </Suspense>
 
           <div className="footer__column">
             <p className="footer__title">{footerContact.title}</p>
@@ -303,7 +301,63 @@ function SocialIcon({name}) {
   );
 }
 
+// Theme shows the withdrawal form link as a bordered box
+const BOXED_LINKS = ['/pages/eu-widerrufsformular'];
+
+/**
+ * @param {{
+ *   menu: NonNullable<FooterQuery['overview']>;
+ *   primaryDomainUrl?: string;
+ *   publicStoreDomain: string;
+ * }}
+ */
+function FooterMenu({menu, primaryDomainUrl, publicStoreDomain}) {
+  return (
+    <div className="footer__column">
+      <p className="footer__title">{menu.title}</p>
+      <ul className="footer__links list--unstyled">
+        {menu.items.map((item) => {
+          if (!item.url) return null;
+          // Strip the store domain so internal links stay in Hydrogen
+          const url =
+            item.url.includes('myshopify.com') ||
+            item.url.includes(publicStoreDomain) ||
+            (primaryDomainUrl && item.url.includes(primaryDomainUrl))
+              ? new URL(item.url).pathname
+              : item.url;
+          const isExternal = !url.startsWith('/');
+          return (
+            <li key={item.id}>
+              {isExternal ? (
+                <a href={url} rel="noopener noreferrer" target="_blank">
+                  {item.title}
+                </a>
+              ) : (
+                <Link
+                  className={
+                    BOXED_LINKS.includes(url) ? 'footer__link--boxed' : undefined
+                  }
+                  to={url}
+                  prefetch="intent"
+                >
+                  {item.title}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * @typedef {Object} FooterProps
+ * @property {Promise<FooterQuery | null>} footer
+ * @property {HeaderQuery | null} [header]
  * @property {{companyId?: string; listId?: string}} [klaviyo]
+ * @property {string} publicStoreDomain
  */
+
+/** @typedef {import('storefrontapi.generated').FooterQuery} FooterQuery */
+/** @typedef {import('storefrontapi.generated').HeaderQuery} HeaderQuery */

@@ -253,6 +253,19 @@ button.reset:hover:not(:has(> *)) {
   }
 }
 
+/* Product page columns split at 1000px (theme "lap") */
+.hidden-below-lap {
+  @media (max-width: 62.4375em) {
+    display: none !important;
+  }
+}
+
+.hidden-lap-and-up {
+  @media (min-width: 62.5em) {
+    display: none !important;
+  }
+}
+
 .announcement-bar {
   align-items: center;
   background: var(--color-brand-green);

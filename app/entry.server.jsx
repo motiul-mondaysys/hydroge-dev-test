@@ -33,11 +33,15 @@ export default async function handleRequest(
       'https://fonts.googleapis.com',
       'https://widget.reviews.io',
       'https://assets.reviews.io',
+      // Reviews.io polaris widget stylesheet + its generated theme styles
+      'https://d19ayerf5ehaab.cloudfront.net',
+      'data:',
     ],
     fontSrc: [
       "'self'",
       'https://fonts.gstatic.com',
       'https://assets.reviews.io',
+      'https://d19ayerf5ehaab.cloudfront.net',
     ],
     imgSrc: [
       "'self'",

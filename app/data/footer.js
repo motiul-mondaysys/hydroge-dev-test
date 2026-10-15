@@ -1,45 +1,4 @@
-// Footer content ported from the live viktilabs.de footer (menus "footer" + "rechtliches")
-export const footerMenus = [
-  {
-    title: 'Übersicht',
-    links: [
-      {title: 'Hilfe & Kontakt', url: '/pages/hilfe'},
-      {title: 'Sendungsverfolgung', url: '/pages/sendungsverfolgung'},
-      {title: 'Persönliche Beratung', url: '/pages/beratung'},
-      {title: 'Vikti-Klub', url: '/pages/vikti-klub'},
-      {title: 'Spar-Abo verwalten', url: '/pages/spar-abo-verwalten'},
-      {title: 'FAQ', url: '/pages/news'},
-      {title: 'Retoureninformationen', url: '/policies/refund-policy'},
-      {title: 'Karriere', url: '/pages/karriere'},
-      {title: 'Geschäftskunden', url: '/pages/b2b'},
-    ],
-  },
-  {
-    title: 'Rechtliches',
-    links: [
-      {title: 'Impressum', url: '/policies/legal-notice'},
-      {title: 'Datenschutz', url: '/policies/privacy-policy'},
-      {title: 'Widerruf', url: '/policies/refund-policy'},
-      {title: 'Versand', url: '/policies/shipping-policy'},
-      {title: 'AGB', url: '/policies/terms-of-service'},
-      {title: 'Garantiebedingungen', url: '/pages/garantiebedingungen'},
-      {
-        title: 'Medizinischer Disclaimer',
-        url: '/pages/medizinischer-disclaimer',
-      },
-      {
-        title: 'Deine gesetzlichen Gewährleistungsrechte',
-        url: '/pages/gesetzliche-gewaehrleistung',
-      },
-      {
-        title: 'Vertrag widerrufen',
-        url: '/pages/eu-widerrufsformular',
-        highlight: true,
-      },
-    ],
-  },
-];
-
+// Footer content ported from the live viktilabs.de footer (menus live in Shopify: footer + rechtliches)
 export const footerContact = {
   title: 'Noch Fragen?',
   html: '<p><strong>Wir sind für Dich erreichbar:</strong></p><p>Dienstags: 13.00 - 17.00 Uhr<br/>Donnerstags: 08.00 - 12.00 Uhr</p><p><strong>Telefonnummer:</strong><br/>+49 30 30809276</p>',
